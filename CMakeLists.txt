@@ -1,0 +1,20 @@
+CMAKE_MINIMUM_REQUIRED(VERSION 3.28.3)
+
+PROJECT(ctemplate C)
+
+SET(CMAKE_C_STANDARD 11)
+set(CMAKE_C_COMPILER "${CMAKE_C_COMPILER}" CACHE STRING "" FORCE)
+set(CMAKE_CXX_COMPILER "${CMAKE_CXX_COMPILER}" CACHE STRING "" FORCE)
+SET(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+ENABLE_TESTING()
+
+include_directories(
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/client
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/server
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/common
+)
+
+add_subdirectory(src/client)
+add_subdirectory(src/server)
