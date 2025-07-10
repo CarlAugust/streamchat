@@ -7,8 +7,10 @@
 #include <stdio.h>
 #include <sys/epoll.h>
 #include <signal.h>
+#include <errno.h>
+#include <config.h>
 
-#define SERVER_PORT 8080
+
 #define MAX_CLIENTS 10
 #define MAX_EVENTS MAX_CLIENTS * 2
 
@@ -97,6 +99,7 @@ int main(void)
                 int client_fd = accept(server_fd, addr, &addr_len);
                 if (client_fd == -1)
                 {
+                    if (errno == EAGAIN || errno == EWOULDBLOCK) break;
                     perror("accept");
                     continue;
                 }
@@ -125,18 +128,19 @@ int main(void)
                 int n = read(fd, buffer, sizeof(buffer));
                 if (n > 0)
                 {
-                    printf("Received from client %d: %.*s\n", fd, n, buffer);
+                    printf("Sent %s\n", buffer);
                     send(fd, buffer, n, 0);
                 }
                 else if (n == 0)
                 {
-                    printf("Client %d disconnected\n", fd);
                     epoll_ctl(epfd, EPOLL_CTL_DEL, fd, NULL);
                     close(fd);
                 }
                 else
                 {
                     perror("read");
+                    epoll_ctl(epfd, EPOLL_CTL_DEL, fd, NULL);
+                    close(fd);
                 }
             }
             else

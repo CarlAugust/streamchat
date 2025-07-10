@@ -13,7 +13,7 @@ ENABLE_TESTING()
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include/client
     ${CMAKE_CURRENT_SOURCE_DIR}/include/server
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/
 )
 
 add_subdirectory(src/client)
