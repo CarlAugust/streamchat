@@ -5,12 +5,93 @@
 #include <stdio.h>
 #include <errno.h>
 #include <arpa/inet.h>
+#include <pthread.h>
+#include <signal.h>
 
 #include <config.h>
 
+int client_fd;
+
+volatile sig_atomic_t shutdown_requested = 0;
+static void handle_sigint(int sig)
+{ 
+    printf("Closed\n");
+    shutdown_requested = 1;
+    close(client_fd);
+}
+
+int loop_recieve(int client_fd)
+{
+    while(!shutdown_requested)
+    {
+        char buffer[MAX_MESSAGE_SIZE];
+        int n = read(client_fd, buffer, MAX_MESSAGE_SIZE);
+        if (n > 0)
+        {
+            printf("SERVER: %s", buffer);
+        }
+        else
+        {
+            perror("read");
+            shutdown_requested = 1;
+            return -1;
+        }
+    }
+    return 0;
+}
+
+int loop_readStdin(int client_fd)
+{
+    while(!shutdown_requested)
+    {
+        char input[MAX_MESSAGE_SIZE];
+        fflush(stdout);
+        if (fgets(input, sizeof(input), stdin) == NULL) {
+            if (shutdown_requested) {
+                break;
+            }
+            // Check for EOF or error
+            if (feof(stdin)) {
+                printf("\nEOF received, exiting.\n");
+                break;
+            } else {
+                perror("fgets");
+                break;
+            }
+        }
+
+        // Magic code which removes input line
+        printf("\x1b[1F");
+        printf("\x1b[2K");
+        if(send(client_fd, input, MAX_MESSAGE_SIZE, 0) == -1)
+        {
+            perror("Send");
+            return -1;
+        }
+    }
+    return 0;
+}
+
+void* thread_readStdinLoop(void* arg)
+{
+    int* client_fd = (int* )(arg);
+    loop_readStdin(*client_fd);
+    return NULL;
+}
+
 int main(void)
 {
-    int client_fd;
+
+    struct sigaction sa;
+    sa.sa_handler = handle_sigint;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    if(sigaction(SIGINT, &sa, NULL) == -1)
+    {
+        perror("sigaction");
+        return EXIT_FAILURE;
+    }
+
     client_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (client_fd == -1)
     {
@@ -34,20 +115,10 @@ int main(void)
         return EXIT_FAILURE;
     }
 
-    for(;;)
-    {
-        char buffer[4] = "abs";
-        send(client_fd, buffer, 4, 0);
-        int n = read(client_fd, buffer, 4);
-        if (n > 0)
-        {
-            printf("%s\n", buffer);
-        }
-        else
-        {
-            perror("read");
-        }
-    }
-
+    pthread_t stdin_thread;
+    pthread_create(&stdin_thread, NULL, thread_readStdinLoop, &client_fd);   
+    loop_recieve(client_fd);
+    pthread_join(stdin_thread, NULL);
+    close(client_fd);
     return EXIT_SUCCESS;
 }
