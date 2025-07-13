@@ -8,13 +8,14 @@
 #include <sys/epoll.h>
 #include <signal.h>
 #include <errno.h>
-#include <config.h>
 #include <string.h>
 
+#include <config.h>
+#include <clients.h>
 
 
 int socket_setNonBlocking(int fd);
-void async_serverLoop(int server_fd, struct sockaddr* addr, socklen_t addr_len, struct epoll_event* events, int epfd);
+void async_serverLoop(int server_fd, struct sockaddr* addr, socklen_t addr_len, struct epoll_event* events, int epfd, Clients* clients);
 
 int server_fd;
 
@@ -80,13 +81,16 @@ int main(void)
         close(epfd);
         return EXIT_FAILURE;
     }
+
+    Clients* clients = clients_create();
     
     struct epoll_event events[MAX_EVENTS];
     while (!shutdown_requested) 
     {
-        async_serverLoop(server_fd, addr, addr_len, events, epfd);
+        async_serverLoop(server_fd, addr, addr_len, events, epfd, clients);
     }
 
+    free(clients);
     close(epfd);
 
     return EXIT_SUCCESS;
@@ -103,23 +107,23 @@ int socket_setNonBlocking(int fd)
     return 0;
 }
 
-// return 0 or -1 for disconnets and 1 for success
-int handle_clientMessage(int client_fd)
+int handle_clientMessage(Clients* clients, int client_fd)
 {
-    char message[MAX_MESSAGE_SIZE];
+    char message[MAX_MESSAGE_SIZE] = {0};
     int read_c;
-    if ((read_c = read(client_fd, message, MAX_MESSAGE_SIZE)) < 1)
+    if ((read_c = read(client_fd, message, MAX_MESSAGE_SIZE - 1)) < 1)
     {
         return read_c;
     }
+    printf("CLIENT: %s\n", message);
     const char* command_msg = "/msg";
     const char* command_chgusrn = "/chgusrn";
 
     char format[20];
-    snprintf(format, sizeof(format), "%%%zus %%%zus", MAX_COMMAND_SIZE, MAX_MESSAGE_SIZE); // Example "%20s %400s"
+    snprintf(format, sizeof(format), "%%%ds %%%ds", MAX_COMMAND_SIZE, MAX_MESSAGE_SIZE); // Example "%20s %400s"
 
-    char command[MAX_COMMAND_SIZE];
-    char message_content[MAX_MESSAGE_CONTENT];
+    char command[MAX_COMMAND_SIZE] = {0};
+    char message_content[MAX_MESSAGE_CONTENT] = {0};
     int scan_c;
     scan_c = sscanf(message, format, command, message_content);
     if (scan_c != 2)
@@ -128,20 +132,20 @@ int handle_clientMessage(int client_fd)
         {
             return -1;
         }
-        return 1;
     }
 
     if(strncmp(command, command_msg, strlen(command_msg)))
     {
-        clients_broadcast(client_fd, message_content);
+        clients_broadcast(clients, message_content);
     }
     else if (strncmp(command, command_msg, strlen(command_chgusrn)))
     {
-        client_changeUsername(client_fd, message_content);
+        client_changeUsername(clients_findClientByFd(clients, client_fd), message_content);
     }
+    return read_c;
 }
 
-void async_serverLoop(int server_fd, struct sockaddr* addr, socklen_t addr_len, struct epoll_event* events, int epfd)
+void async_serverLoop(int server_fd, struct sockaddr* addr, socklen_t addr_len, struct epoll_event* events, int epfd, Clients* clients)
 {
     int nfds;
     if ((nfds = epoll_wait(epfd, events, MAX_EVENTS, 1000)) == -1)
@@ -149,8 +153,9 @@ void async_serverLoop(int server_fd, struct sockaddr* addr, socklen_t addr_len, 
         perror("epoll_wait");
         close(server_fd);
         close(epfd);
-        return EXIT_FAILURE;
+        return;
     }
+
     for (int i = 0; i < nfds; i++) 
     {
         if (events[i].data.fd == server_fd)
@@ -177,14 +182,16 @@ void async_serverLoop(int server_fd, struct sockaddr* addr, socklen_t addr_len, 
                 perror("epoll_ctl add client");
                 close(client_fd);
             }
+
+            clients_add(clients, client_fd);
         }
         else if (events[i].events & EPOLLIN)
         {
             int client_fd = events[i].data.fd;
-            if (handle_clientMessage(client_fd) < 1)
+            if (handle_clientMessage(clients, client_fd) < 1)
             {
                 epoll_ctl(epfd, EPOLL_CTL_DEL, client_fd, NULL);
-                close(client_fd);
+                client_close(clients_findClientByFd(clients, client_fd));
             }
         }
         else

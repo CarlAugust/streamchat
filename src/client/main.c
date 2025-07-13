@@ -24,11 +24,11 @@ int loop_recieve(int client_fd)
 {
     while(!shutdown_requested)
     {
-        char buffer[MAX_MESSAGE_SIZE];
+        char buffer[MAX_MESSAGE_SIZE] = {0};
         int n = read(client_fd, buffer, MAX_MESSAGE_SIZE);
         if (n > 0)
         {
-            printf("SERVER: %s", buffer);
+            printf("SERVER: %s\n", buffer);
         }
         else
         {
@@ -44,25 +44,9 @@ int loop_readStdin(int client_fd)
 {
     while(!shutdown_requested)
     {
-        char input[MAX_MESSAGE_SIZE];
-        fflush(stdout);
-        if (fgets(input, sizeof(input), stdin) == NULL) {
-            if (shutdown_requested) {
-                break;
-            }
-            // Check for EOF or error
-            if (feof(stdin)) {
-                printf("\nEOF received, exiting.\n");
-                break;
-            } else {
-                perror("fgets");
-                break;
-            }
-        }
+        char input[MAX_MESSAGE_SIZE] = {0};
+        fgets(input, MAX_MESSAGE_SIZE, stdin);
 
-        // Magic code which removes input line
-        printf("\x1b[1F");
-        printf("\x1b[2K");
         if(send(client_fd, input, MAX_MESSAGE_SIZE, 0) == -1)
         {
             perror("Send");

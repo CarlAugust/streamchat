@@ -12,21 +12,16 @@
 typedef struct Client {
     int client_fd;
     int connected;
-    char* username;
+    char username[MAX_USERNAME_SIZE];
 } Client;
 
-int client_changeName(int client_fd, const char* username);
-int client_close();
+void client_changeUsername(Client* client, const char* username);
+void client_close(Client* client);
 
-typedef struct Clients {
-    Client* list;
-    int count;
-    int capacity;   
-} Clients;
+typedef Client Clients[MAX_CLIENTS];
 
 Clients* clients_create();
-int clients_destroy(Clients* clients);
-int clients_add(Clients* clients);
+int clients_add(Clients* clients, int client_fd);
 
-int clients_broadcast();
-Client* clients_findClientByFd(Clients* client, int client_fd);
+int clients_broadcast(Clients* clients, const char* message);
+Client* clients_findClientByFd(Clients* clients, int client_fd);

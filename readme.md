@@ -33,3 +33,11 @@ Maybe more more to come
 
 If you dont use any of these the server will simply send back an error and these
 instructions will be prompted.
+
+## Honestly i kind gave up
+There is a lot of problems with reading input and displaying it using the client
+as an interface. So i just decided to give up on this project.
+
+However it still thought me some stuff, like async programming and how it works, using epoll.
+I might do something similar later, however then i will be a better gui then the cli, as that
+just complicates a lot of things.
